@@ -54,12 +54,12 @@ class NuevoRViewController: UIViewController, UITextFieldDelegate, UIPickerViewD
             return false
         }
         
- 
+        
         /*
-        return textField.isEqual(self.txtNombre) ||
-               textField.isEqual(self.txtApellidos) ||
-               textField.isEqual(txtCalleNumero)
-        */
+         return textField.isEqual(self.txtNombre) ||
+         textField.isEqual(self.txtApellidos) ||
+         textField.isEqual(txtCalleNumero)
+         */
     }
     
     func subeBajaPicker(elPicker: UIView, subeObaja:Bool) {
@@ -84,7 +84,7 @@ class NuevoRViewController: UIViewController, UITextFieldDelegate, UIPickerViewD
     
     override func viewDidLoad() {
         super.viewDidLoad()
-
+        
         self.txtNombre.delegate = self
         self.txtApellidos.delegate = self
         self.txtFechaNacimiento.delegate = self
@@ -94,10 +94,13 @@ class NuevoRViewController: UIViewController, UITextFieldDelegate, UIPickerViewD
         self.txtMunicipio.delegate = self
         self.pickerFN.hidden = true
         self.pickerEstados.delegate = self
+        self.pickerEstados.dataSource = self
+        self.pickerColonias.delegate = self
+        self.pickerMunicipios.delegate = self
         self.estados = NSArray()
         //Iniciallizar con datos temporales
-        self.municipios = ["", "", ""]//NSArray()
-        self.colonias = NSArray()
+        self.municipios = ["Ecatepec", "Nezahualcoyotl", "Chalco"]//NSArray()
+        self.colonias = ["Doctores", "Del Valle", "Cuahtémoc","Obrera"]//NSArray()
         
         //Todo: Revisar si este es el mejor momento para cargar el WS
         self.consultaEstados()
@@ -112,18 +115,28 @@ class NuevoRViewController: UIViewController, UITextFieldDelegate, UIPickerViewD
     }
     
     func consultaEstados(){
-        let urlString = "http://edg3.mx/webservicessepomex/wmregresaestados.php"
-        let laURL = NSURL(string: urlString)!
-        let elRequest = NSURLRequest(URL: laURL)
-        self.datosRecibidos = NSMutableData(capacity: 0)
-        self.conexion = NSURLConnection(request: elRequest, delegate: self)
+        if ConnectionManager.hayConexion(){
+            if !ConnectionManager.esConexionWiFi(){
+                //si hay conexion, pero es celular, preguntar al usuario
+                //si quiere descargar el contenido
+                //.......
+            }
+            let urlString = "http://edg3.mx/webservicessepomex/wmregresaestados.php"
+            let laURL = NSURL(string: urlString)!
+            let elRequest = NSURLRequest(URL: laURL)
+            self.datosRecibidos = NSMutableData(capacity: 0)
+            self.conexion = NSURLConnection(request: elRequest, delegate: self)
         
-        if self.conexion == nil{
-            self.datosRecibidos = nil
-            self.conexion = nil
-            print("No se puede acceder al WS Estados")
+            if self.conexion == nil{
+                self.datosRecibidos = nil
+                self.conexion = nil
+                print("No se puede acceder al WS Estados")
+            }
         }
-        
+        else
+        {
+            print("No hay conexión a Internet")
+        }
     }
     
     
@@ -133,7 +146,8 @@ class NuevoRViewController: UIViewController, UITextFieldDelegate, UIPickerViewD
         print("No se puede accederr al WS Estados: Error del servidor")
     }
     
-    func connection(connection: NSURLConnection, didReceiveData data: NSData){
+    func connection(connection: NSURLConnection, didReceiveResponse response: NSURLResponse){
+        //Ya se logró la conexión, preparando para recibir datos
         datosRecibidos?.length = 0
     }
     
@@ -145,15 +159,14 @@ class NuevoRViewController: UIViewController, UITextFieldDelegate, UIPickerViewD
     func connectionDidFinishLoading(connection: NSURLConnection){
         do{
             let arregloRecibido = try NSJSONSerialization.JSONObjectWithData(datosRecibidos!, options: .AllowFragments) as! NSArray
-            estados = arregloRecibido
-            pickerEstados.reloadAllComponents()
+            self.estados = arregloRecibido
+            self.pickerEstados.reloadAllComponents()
         }
         catch{
             print("Error al recibir")
         }
-        }
     }
-
+    
     override func didReceiveMemoryWarning() {
         super.didReceiveMemoryWarning()
         // Dispose of any resources that can be recreated.
@@ -176,7 +189,7 @@ class NuevoRViewController: UIViewController, UITextFieldDelegate, UIPickerViewD
         {
             return municipios!.count
         }
-        else if pickerColonias.isEqual(pickerView)
+        else
         {
             return colonias!.count
         }
@@ -186,32 +199,58 @@ class NuevoRViewController: UIViewController, UITextFieldDelegate, UIPickerViewD
     {
         if pickerEstados.isEqual(pickerView)
         {
-            return (estados![row],valueForKey("nombreEstado") as! String)
+            return (estados![row].valueForKey("nombreEstado") as! String)
             
         }
         else if pickerMunicipios.isEqual(pickerView)
         {
-            rreturn (municipios![row]valouForKey("nombreEstado") as! String)
+            
+            return (municipios![row] as! String)
         }
-        else if pickerColonias.isEqual(pickerView)
+        else
         {
             return (colonias![row] as! String)
         }
     }
-
     
-    
-    
-    
-
-    /*
-    // MARK: - Navigation
-
-    // In a storyboard-based application, you will often want to do a little preparation before navigation
-    override func prepareForSegue(segue: UIStoryboardSegue, sender: AnyObject?) {
-        // Get the new view controller using segue.destinationViewController.
-        // Pass the selected object to the new view controller.
+    func pickerView(pickerView: UIPickerView, didSelectRow row: Int, inComponent component: Int) {
+        
+        //el picker solo tiene un component, entonces "component" no se usa
+        
+        if pickerEstados.isEqual(pickerView)
+        {
+            let estado = estados![row].valueForKey("nombreEstado") as! String
+            txtEstado.text = estado
+            
+            let codigoEstado = (estados![row].valueForKey("c_estado") as! String)
+            
+            print(codigoEstado)
+            //Invocar el otro WS para llenar el picker de municipios
+            
+            SOAPManager.instance.consultaMunicipios(codigoEstado)
+        }
+        else if pickerMunicipios.isEqual(pickerView)
+        {
+            txtMunicipio.text = municipios![row] as? String
+        }
+        else
+        {
+            txtColonia.text = colonias![row] as? String
+        }
     }
-    */
+    
+    
+    
+    
+    
+    /*
+     // MARK: - Navigation
+     
+     // In a storyboard-based application, you will often want to do a little preparation before navigation
+     override func prepareForSegue(segue: UIStoryboardSegue, sender: AnyObject?) {
+     // Get the new view controller using segue.destinationViewController.
+     // Pass the selected object to the new view controller.
+     }
+     */
 
 }
